@@ -150,12 +150,17 @@
             }
             
             // 显示结果
-            document.getElementById('result').className = 'mt-6 bg-gray-50 p-4 rounded-md';
-            document.getElementById('prescaler').textContent = result.prescaler;
-            document.getElementById('period').textContent = result.period;
-            document.getElementById('calculatedTime').textContent = result.calculatedTime.toFixed(6);
-            document.getElementById('error').textContent = result.error.toFixed(6);
-            document.getElementById('result').classList.remove('hidden');
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">计算结果</h2>
+                <div class="bg-gray-50 p-4 rounded-md">
+                    <p class="text-gray-600">预分频系数 (TIM_Prescaler): <span id="prescaler" class="font-medium text-gray-800">${result.prescaler}</span></p>
+                    <p class="text-gray-600">自动重载值 (TIM_Period): <span id="period" class="font-medium text-gray-800">${result.period}</span></p>
+                    <p class="text-gray-600">计算定时时间: <span id="calculatedTime" class="font-medium text-gray-800">${result.calculatedTime.toFixed(6)}</span> 秒</p>
+                    <p class="text-gray-600">误差: <span id="error" class="font-medium text-gray-800">${result.error.toFixed(6)}</span>%</p>
+                </div>
+            `;
+            resultDiv.classList.remove('hidden');
         });
         
         function calculateOptimalParameters(timClock, targetTime) {
@@ -197,10 +202,11 @@
         
         function showError(message) {
             const resultDiv = document.getElementById('result');
-            resultDiv.className = 'mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative';
             resultDiv.innerHTML = `
-                <strong class="font-bold">错误: </strong>
-                <span class="block sm:inline">${message}</span>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    <strong class="font-bold">错误: </strong>
+                    <span class="block sm:inline">${message}</span>
+                </div>
             `;
             resultDiv.classList.remove('hidden');
         }
