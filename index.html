@@ -13,7 +13,18 @@
         
         <div class="bg-blue-50 p-4 rounded-md mb-6">
             <p class="text-center text-blue-800 font-medium">计算公式:</p>
-            <p class="text-center text-blue-700 mt-2">$$\text{定时时间} = \frac{1 + \text{TIM_Prescaler}}{\text{Tim_Clock}} \times (1 + \text{TIM_Period})$$</p>
+            <p id="formulaDisplay" class="text-center text-blue-700 mt-2">$$\text{定时时间} = \frac{(\text{TIM_Prescaler} + 1)}{\text{Tim_Clock}} \times (\text{TIM_Period} + 1)$$</p>
+            
+            <div class="mt-4 flex flex-col space-y-2">
+                <div class="flex items-center">
+                    <input type="checkbox" id="prescalerPlusOne" class="mr-2" checked>
+                    <label for="prescalerPlusOne" class="block text-sm font-medium text-gray-700">预分频系数 (TIM_Prescaler) + 1</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="periodPlusOne" class="mr-2" checked>
+                    <label for="periodPlusOne" class="block text-sm font-medium text-gray-700">自动重载值 (TIM_Period) + 1</label>
+                </div>
+            </div>
         </div>
         
         <form id="timerForm" class="space-y-4">
@@ -135,6 +146,10 @@
         const customPeriodCheck = document.getElementById('customPeriodCheck');
         const customPeriodInput = document.getElementById('customPeriod');
         
+        // 预分频系数和自动重载值是否加1的复选框
+        const prescalerPlusOne = document.getElementById('prescalerPlusOne');
+        const periodPlusOne = document.getElementById('periodPlusOne');
+        
         // 监听自定义预分频系数复选框变化
         customPrescalerCheck.addEventListener('change', function() {
             customPrescalerInput.disabled = !this.checked;
@@ -190,8 +205,36 @@
             });
         });
         
+        // 动态更新公式显示的函数
+        function updateFormulaDisplay() {
+            const prescalerPlusOneValue = getPlusOneValue(prescalerPlusOne);
+            const periodPlusOneValue = getPlusOneValue(periodPlusOne);
+            
+            let prescalerPart = "\\text{TIM_Prescaler}";
+            if (prescalerPlusOneValue === 1) {
+                prescalerPart += " + 1";
+            }
+            
+            let periodPart = "\\text{TIM_Period}";
+            if (periodPlusOneValue === 1) {
+                periodPart += " + 1";
+            }
+            
+            const formula = `$$\\text{定时时间} = \\frac{(${prescalerPart})}{\\text{Tim_Clock}} \\times (${periodPart})$$`;
+            document.getElementById('formulaDisplay').textContent = formula;
+            
+            // 重新渲染MathJax
+            MathJax.typesetPromise();
+        }
+        
+        // 监听复选框变化，更新公式显示
+        prescalerPlusOne.addEventListener('change', updateFormulaDisplay);
+        periodPlusOne.addEventListener('change', updateFormulaDisplay);
+        
         // 初始化时触发一次change事件
         document.querySelector('input[name="mode"]:checked').dispatchEvent(new Event('change'));
+        // 初始化时更新公式显示
+        updateFormulaDisplay();
         
         // 计算函数
         document.getElementById('timerForm').addEventListener('submit', function(e) {
@@ -329,7 +372,15 @@
             resultDiv.classList.remove('hidden');
         });
         
+        function getPlusOneValue(checkbox) {
+            return checkbox.checked ? 1 : 0;
+        }
+        
         function calculateOptimalParameters(timClock, targetTime) {
+            // 获取用户选择的加1值
+            const prescalerPlusOneValue = getPlusOneValue(prescalerPlusOne);
+            const periodPlusOneValue = getPlusOneValue(periodPlusOne);
+            
             let bestPrescaler = 0;
             let bestPeriod = 0;
             let bestError = Infinity;
@@ -338,12 +389,12 @@
             // 遍历所有可能的预分频系数 (0-65535)
             for (let prescaler = 0; prescaler <= 65535; prescaler++) {
                 // 计算自动重载值
-                const period = (targetTime * timClock) / (prescaler + 1) - 1;
+                const period = (targetTime * timClock) / (prescaler + prescalerPlusOneValue) - periodPlusOneValue;
                 
                 // 检查是否在有效范围内
                 if (period >= 1 && period <= 65535) {
                     const intPeriod = Math.round(period);
-                    const calculatedTime = ((1.0 + prescaler) / timClock) * (1.0 + intPeriod);
+                    const calculatedTime = ((prescaler + prescalerPlusOneValue) / timClock) * (intPeriod + periodPlusOneValue);
                     const error = Math.abs((calculatedTime - targetTime) / targetTime) * 100;
                     
                     if (error < bestError) {
@@ -367,8 +418,12 @@
         }
         
         function calculateParametersWithCustomPrescaler(timClock, targetTime, prescaler) {
+            // 获取用户选择的加1值
+            const prescalerPlusOneValue = getPlusOneValue(prescalerPlusOne);
+            const periodPlusOneValue = getPlusOneValue(periodPlusOne);
+            
             // 使用指定的预分频系数计算自动重载值
-            const period = (targetTime * timClock) / (prescaler + 1) - 1;
+            const period = (targetTime * timClock) / (prescaler + prescalerPlusOneValue) - periodPlusOneValue;
             
             // 检查是否在有效范围内
             if (period < 1 || period > 65535) {
@@ -382,7 +437,7 @@
             }
             
             const intPeriod = Math.round(period);
-            const calculatedTime = ((1.0 + prescaler) / timClock) * (1.0 + intPeriod);
+            const calculatedTime = ((prescaler + prescalerPlusOneValue) / timClock) * (intPeriod + periodPlusOneValue);
             const error = Math.abs((calculatedTime - targetTime) / targetTime) * 100;
             
             return {
@@ -394,8 +449,12 @@
         }
         
         function calculateWithCustomParameters(timClock, prescaler, period, targetTime) {
+            // 获取用户选择的加1值
+            const prescalerPlusOneValue = getPlusOneValue(prescalerPlusOne);
+            const periodPlusOneValue = getPlusOneValue(periodPlusOne);
+            
             // 使用指定的预分频系数和自动重载值计算定时时间
-            const calculatedTime = ((1.0 + prescaler) / timClock) * (1.0 + period);
+            const calculatedTime = ((prescaler + prescalerPlusOneValue) / timClock) * (period + periodPlusOneValue);
             
             // 计算与目标时间的误差
             const error = Math.abs((calculatedTime - targetTime) / targetTime) * 100;
