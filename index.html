@@ -29,6 +29,20 @@
                 </div>
             </div>
             
+            <div class="flex items-center">
+                <input type="checkbox" id="customPrescalerCheck" class="mr-2">
+                <label for="customPrescalerCheck" class="block text-sm font-medium text-gray-700">自定义预分频系数</label>
+                <input type="number" id="customPrescaler" min="0" max="65535" step="1" disabled
+                    class="ml-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <div class="flex items-center">
+                <input type="checkbox" id="customPeriodCheck" class="mr-2">
+                <label for="customPeriodCheck" class="block text-sm font-medium text-gray-700">自定义自动重载值</label>
+                <input type="number" id="customPeriod" min="1" max="65535" step="1" disabled
+                    class="ml-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            
             <div class="flex space-x-4">
                 <div class="flex-1">
                     <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -88,6 +102,51 @@
         const timeUnitSelect = document.getElementById('timeUnit');
         const freqUnitSelect = document.getElementById('freqUnit');
         
+        // 自定义预分频系数相关元素
+        const customPrescalerCheck = document.getElementById('customPrescalerCheck');
+        const customPrescalerInput = document.getElementById('customPrescaler');
+        
+        // 自定义自动重载值相关元素
+        const customPeriodCheck = document.getElementById('customPeriodCheck');
+        const customPeriodInput = document.getElementById('customPeriod');
+        
+        // 监听自定义预分频系数复选框变化
+        customPrescalerCheck.addEventListener('change', function() {
+            customPrescalerInput.disabled = !this.checked;
+            if (!this.checked) {
+                customPrescalerInput.value = '';
+            }
+            // 检查是否两个自定义选项都被选中
+            updateInputStates();
+        });
+        
+        // 监听自定义自动重载值复选框变化
+        customPeriodCheck.addEventListener('change', function() {
+            customPeriodInput.disabled = !this.checked;
+            if (!this.checked) {
+                customPeriodInput.value = '';
+            }
+            // 检查是否两个自定义选项都被选中
+            updateInputStates();
+        });
+        
+        // 更新输入框状态的函数
+        function updateInputStates() {
+            // 根据当前模式恢复输入框状态，即使两个自定义选项都被选中
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            if (mode === 'time') {
+                timeInput.disabled = false;
+                timeUnitSelect.disabled = false;
+                freqInput.disabled = true;
+                freqUnitSelect.disabled = true;
+            } else {
+                timeInput.disabled = true;
+                timeUnitSelect.disabled = true;
+                freqInput.disabled = false;
+                freqUnitSelect.disabled = false;
+            }
+        }
+        
         modeInputs.forEach(input => {
             input.addEventListener('change', () => {
                 if (input.value === 'time') {
@@ -120,19 +179,28 @@
             const mode = document.querySelector('input[name="mode"]:checked').value;
             let targetValue;
             
-            if (mode === 'time') {
-                const timeValue = parseFloat(timeInput.value);
-                const timeUnit = parseFloat(timeUnitSelect.value);
-                targetValue = timeValue * timeUnit;
-            } else {
-                const freqValue = parseFloat(freqInput.value);
-                const freqUnit = parseFloat(freqUnitSelect.value);
-                targetValue = 1 / (freqValue * freqUnit);
+            // 只有在需要目标值的情况下才获取目标值（即至少有一个自定义选项未被选中）
+            if (!customPrescalerCheck.checked || !customPeriodCheck.checked) {
+                if (mode === 'time') {
+                    const timeValue = parseFloat(timeInput.value);
+                    const timeUnit = parseFloat(timeUnitSelect.value);
+                    targetValue = timeValue * timeUnit;
+                } else {
+                    const freqValue = parseFloat(freqInput.value);
+                    const freqUnit = parseFloat(freqUnitSelect.value);
+                    targetValue = 1 / (freqValue * freqUnit);
+                }
+                
+                // 验证目标值
+                if (isNaN(targetValue) || targetValue <= 0) {
+                    showError('请输入有效的目标时间或频率');
+                    return;
+                }
             }
             
             // 验证输入
-            if (isNaN(timClockValue) || isNaN(targetValue) || timClockValue <= 0 || targetValue <= 0) {
-                showError('请输入有效的数值');
+            if (isNaN(timClockValue) || timClockValue <= 0) {
+                showError('请输入有效的时钟频率');
                 return;
             }
             
@@ -142,13 +210,63 @@
                 return;
             }
             
-            // 计算最优参数
-            const result = calculateOptimalParameters(timClock, targetValue);
-            
-            // 检查计算结果
-            if (result.error === Infinity) {
-                showError('无法计算出合适的参数，请检查输入值是否合理');
-                return;
+            let result;
+            // 当两个自定义选项都被选中时，使用自定义值计算并计算与目标值的误差
+            if (customPrescalerCheck.checked && customPeriodCheck.checked) {
+                const customPrescalerValue = parseInt(customPrescalerInput.value);
+                const customPeriodValue = parseInt(customPeriodInput.value);
+                
+                // 验证自定义预分频系数
+                if (isNaN(customPrescalerValue) || customPrescalerValue < 0 || customPrescalerValue > 65535) {
+                    showError('请输入有效的预分频系数 (0-65535)');
+                    return;
+                }
+                
+                // 验证自定义自动重载值
+                if (isNaN(customPeriodValue) || customPeriodValue < 1 || customPeriodValue > 65535) {
+                    showError('请输入有效的自动重载值 (1-65535)');
+                    return;
+                }
+                
+                // 获取目标值
+                if (mode === 'time') {
+                    const timeValue = parseFloat(timeInput.value);
+                    const timeUnit = parseFloat(timeUnitSelect.value);
+                    targetValue = timeValue * timeUnit;
+                } else {
+                    const freqValue = parseFloat(freqInput.value);
+                    const freqUnit = parseFloat(freqUnitSelect.value);
+                    targetValue = 1 / (freqValue * freqUnit);
+                }
+                
+                // 验证目标值
+                if (isNaN(targetValue) || targetValue <= 0) {
+                    showError('请输入有效的目标时间或频率');
+                    return;
+                }
+                
+                result = calculateWithCustomParameters(timClock, customPrescalerValue, customPeriodValue, targetValue);
+            } else {
+                // 检查是否使用自定义预分频系数
+                if (customPrescalerCheck.checked) {
+                    const customPrescalerValue = parseInt(customPrescalerInput.value);
+                    // 验证自定义预分频系数
+                    if (isNaN(customPrescalerValue) || customPrescalerValue < 0 || customPrescalerValue > 65535) {
+                        showError('请输入有效的预分频系数 (0-65535)');
+                        return;
+                    }
+                    // 使用自定义预分频系数计算参数
+                    result = calculateParametersWithCustomPrescaler(timClock, targetValue, customPrescalerValue);
+                } else {
+                    // 计算最优参数
+                    result = calculateOptimalParameters(timClock, targetValue);
+                }
+                
+                // 检查计算结果
+                if (result.error === Infinity) {
+                    showError('无法计算出合适的参数，请检查输入值是否合理');
+                    return;
+                }
             }
             
             // 计算实际频率
@@ -161,14 +279,26 @@
             const { value: formattedTime, unit: timeUnit } = formatValueWithUnit(result.calculatedTime, 's');
             const { value: formattedFrequency, unit: frequencyUnit } = formatValueWithUnit(calculatedFrequency, 'Hz');
             
+            // 检查是否使用了自定义参数
+            let customPrescalerMessage = '';
+            let customPeriodMessage = '';
+            if (customPrescalerCheck.checked) {
+                customPrescalerMessage = `<p class="text-gray-600 text-sm mt-2">注意：使用了自定义预分频系数 ${result.prescaler}</p>`;
+            }
+            if (customPeriodCheck.checked) {
+                customPeriodMessage = `<p class="text-gray-600 text-sm">注意：使用了自定义自动重载值 ${result.period}</p>`;
+            }
+            
             resultDiv.innerHTML = `
                 <h2 class="text-lg font-semibold text-gray-800 mb-3">计算结果</h2>
                 <div class="bg-gray-50 p-4 rounded-md">
                     <p class="text-gray-600">预分频系数 (TIM_Prescaler): <span id="prescaler" class="font-medium text-gray-800">${result.prescaler}</span></p>
                     <p class="text-gray-600">自动重载值 (TIM_Period): <span id="period" class="font-medium text-gray-800">${result.period}</span></p>
-                    <p class="text-gray-600">计算定时时间: <span id="calculatedTime" class="font-medium text-gray-800">${formattedTime}</span> ${timeUnit}</p>
+                    <p class="text-gray-600">计算定时时间: <span id="calculatedTime" class="font-medium text-gray-800">${result.calculatedTime} s | ${formattedTime}</span> ${timeUnit}</p>
                     <p class="text-gray-600">计算频率: <span id="calculatedFrequency" class="font-medium text-gray-800">${formattedFrequency}</span> ${frequencyUnit}</p>
                     <p class="text-gray-600">误差: <span id="error" class="font-medium text-gray-800">${result.error.toFixed(6)}</span>%</p>
+                    ${customPrescalerMessage}
+                    ${customPeriodMessage}
                 </div>
             `;
             resultDiv.classList.remove('hidden');
@@ -208,6 +338,48 @@
                 period: bestPeriod,
                 calculatedTime: bestCalculatedTime,
                 error: bestError
+            };
+        }
+        
+        function calculateParametersWithCustomPrescaler(timClock, targetTime, prescaler) {
+            // 使用指定的预分频系数计算自动重载值
+            const period = (targetTime * timClock) / (prescaler + 1) - 1;
+            
+            // 检查是否在有效范围内
+            if (period < 1 || period > 65535) {
+                // 如果不在有效范围内，返回一个错误结果
+                return {
+                    prescaler: prescaler,
+                    period: 0,
+                    calculatedTime: 0,
+                    error: Infinity
+                };
+            }
+            
+            const intPeriod = Math.round(period);
+            const calculatedTime = ((1.0 + prescaler) / timClock) * (1.0 + intPeriod);
+            const error = Math.abs((calculatedTime - targetTime) / targetTime) * 100;
+            
+            return {
+                prescaler: prescaler,
+                period: intPeriod,
+                calculatedTime: calculatedTime,
+                error: error
+            };
+        }
+        
+        function calculateWithCustomParameters(timClock, prescaler, period, targetTime) {
+            // 使用指定的预分频系数和自动重载值计算定时时间
+            const calculatedTime = ((1.0 + prescaler) / timClock) * (1.0 + period);
+            
+            // 计算与目标时间的误差
+            const error = Math.abs((calculatedTime - targetTime) / targetTime) * 100;
+            
+            return {
+                prescaler: prescaler,
+                period: period,
+                calculatedTime: calculatedTime,
+                error: error
             };
         }
         
