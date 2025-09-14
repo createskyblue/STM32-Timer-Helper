@@ -225,31 +225,19 @@
         function formatValueWithUnit(value, unit) {
             const absValue = Math.abs(value);
             
-            // For frequency units (Hz), use different scaling
-            if (unit === 'Hz') {
-                if (absValue >= 1000000) {
-                    return { value: (value / 1000000).toFixed(3), unit: 'MHz' };
-                } else if (absValue >= 1000) {
-                    return { value: (value / 1000).toFixed(3), unit: 'kHz' };
-                } else if (absValue >= 1) {
-                    return { value: value.toFixed(3), unit: 'Hz' };
-                } else if (absValue >= 0.001) {
-                    return { value: (value * 1000).toFixed(3), unit: 'mHz' };
-                } else {
-                    return { value: (value * 1000000).toFixed(3), unit: 'μHz' };
-                }
-            } 
-            // For time units (s), keep the original logic
-            else {
-                if (absValue >= 1.0) {
-                    return { value: value.toFixed(3), unit: unit };
-                } else if (absValue >= 0.001) {
-                    return { value: (value * 1000).toFixed(3), unit: 'm' + unit };
-                } else if (absValue >= 0.000001) {
-                    return { value: (value * 1000000).toFixed(3), unit: 'μ' + unit };
-                } else {
-                    return { value: (value * 1000000000).toFixed(3), unit: 'n' + unit };
-                }
+            // Use the same scaling logic for both time and frequency units
+            if (absValue >= 1000000) {
+                return { value: (value / 1000000).toFixed(3), unit: 'M' + unit };
+            } else if (absValue >= 1000) {
+                return { value: (value / 1000).toFixed(3), unit: 'k' + unit };
+            } else if (absValue >= 1) {
+                return { value: value.toFixed(3), unit: unit };
+            } else if (absValue >= 0.001) {
+                return { value: (value * 1000).toFixed(3), unit: 'm' + unit };
+            } else if (absValue >= 0.000001) {
+                return { value: (value * 1000000).toFixed(3), unit: 'μ' + unit };
+            } else {
+                return { value: (value * 1000000000).toFixed(3), unit: 'n' + unit };
             }
         }
     </script>
