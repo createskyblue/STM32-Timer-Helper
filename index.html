@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>定时器计算器</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -19,9 +18,15 @@
         
         <form id="timerForm" class="space-y-4">
             <div>
-                <label for="timClock" class="block text-sm font-medium text-gray-700 mb-1">时钟主频 (MHz)</label>
-                <input type="number" id="timClock" step="0.1" min="0.1" required
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label for="timClock" class="block text-sm font-medium text-gray-700 mb-1">时钟主频</label>
+                <div class="flex">
+                    <input type="number" id="timClock" step="0.000001" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <select id="clockUnit" class="border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="1e6">MHz</option>
+                        <option value="1e3">kHz</option>
+                    </select>
+                </div>
             </div>
             
             <div class="flex space-x-4">
@@ -30,7 +35,7 @@
                         <input type="radio" name="mode" value="time" checked class="mr-2">定时时间
                     </label>
                     <div class="flex">
-                        <input type="number" id="timeValue" step="0.001" min="0.001" disabled
+                        <input type="number" id="timeValue" step="0.001" disabled
                             class="w-full px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <select id="timeUnit" disabled class="border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="1">秒 (S)</option>
@@ -46,7 +51,7 @@
                         <input type="radio" name="mode" value="frequency" class="mr-2">定时频率
                     </label>
                     <div class="flex">
-                        <input type="number" id="freqValue" step="1" min="1" disabled
+                        <input type="number" id="freqValue" step="1" disabled
                             class="w-full px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <select id="freqUnit" disabled class="border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="1">Hz</option>
@@ -68,6 +73,7 @@
                 <p class="text-gray-600">预分频系数 (TIM_Prescaler): <span id="prescaler" class="font-medium text-gray-800"></span></p>
                 <p class="text-gray-600">自动重载值 (TIM_Period): <span id="period" class="font-medium text-gray-800"></span></p>
                 <p class="text-gray-600">计算定时时间: <span id="calculatedTime" class="font-medium text-gray-800"></span> 秒</p>
+                <p class="text-gray-600">计算频率: <span id="calculatedFrequency" class="font-medium text-gray-800"></span> Hz</p>
                 <p class="text-gray-600">误差: <span id="error" class="font-medium text-gray-800"></span>%</p>
             </div>
         </div>
@@ -78,21 +84,6 @@
         const modeInputs = document.querySelectorAll('input[name="mode"]');
         const timeInput = document.getElementById('timeValue');
         const freqInput = document.getElementById('freqValue');
-        
-        modeInputs.forEach(input => {
-            input.addEventListener('change', () => {
-                if (input.value === 'time') {
-                    timeInput.disabled = false;
-                    freqInput.disabled = true;
-                    freqInput.value = '';
-                } else {
-                    timeInput.disabled = true;
-                    freqInput.disabled = false;
-                    timeInput.value = '';
-                }
-            });
-        });
-        
         // 启用/禁用单位选择框
         const timeUnitSelect = document.getElementById('timeUnit');
         const freqUnitSelect = document.getElementById('freqUnit');
@@ -115,12 +106,17 @@
             });
         });
         
+        // 初始化时触发一次change事件
+        document.querySelector('input[name="mode"]:checked').dispatchEvent(new Event('change'));
+        
         // 计算函数
         document.getElementById('timerForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             // 获取输入值
-            const timClock = parseFloat(document.getElementById('timClock').value);
+            const timClockValue = parseFloat(document.getElementById('timClock').value);
+            const clockUnit = parseFloat(document.getElementById('clockUnit').value);
+            const timClock = timClockValue * clockUnit;
             const mode = document.querySelector('input[name="mode"]:checked').value;
             let targetValue;
             
@@ -135,13 +131,19 @@
             }
             
             // 验证输入
-            if (isNaN(timClock) || isNaN(targetValue) || timClock <= 0 || targetValue <= 0) {
+            if (isNaN(timClockValue) || isNaN(targetValue) || timClockValue <= 0 || targetValue <= 0) {
                 showError('请输入有效的数值');
                 return;
             }
             
+            // 检查时钟频率是否为正数
+            if (timClock <= 0) {
+                showError('时钟频率必须大于0');
+                return;
+            }
+            
             // 计算最优参数
-            const result = calculateOptimalParameters(timClock * 1000000, targetValue);
+            const result = calculateOptimalParameters(timClock, targetValue);
             
             // 检查计算结果
             if (result.error === Infinity) {
@@ -149,11 +151,15 @@
                 return;
             }
             
+            // 计算实际频率
+            const calculatedFrequency = 1 / result.calculatedTime;
+            
             // 显示结果
             const resultDiv = document.getElementById('result');
             
             // 自动适应单位
             const { value: formattedTime, unit: timeUnit } = formatValueWithUnit(result.calculatedTime, 's');
+            const { value: formattedFrequency, unit: frequencyUnit } = formatValueWithUnit(calculatedFrequency, 'Hz');
             
             resultDiv.innerHTML = `
                 <h2 class="text-lg font-semibold text-gray-800 mb-3">计算结果</h2>
@@ -161,6 +167,7 @@
                     <p class="text-gray-600">预分频系数 (TIM_Prescaler): <span id="prescaler" class="font-medium text-gray-800">${result.prescaler}</span></p>
                     <p class="text-gray-600">自动重载值 (TIM_Period): <span id="period" class="font-medium text-gray-800">${result.period}</span></p>
                     <p class="text-gray-600">计算定时时间: <span id="calculatedTime" class="font-medium text-gray-800">${formattedTime}</span> ${timeUnit}</p>
+                    <p class="text-gray-600">计算频率: <span id="calculatedFrequency" class="font-medium text-gray-800">${formattedFrequency}</span> ${frequencyUnit}</p>
                     <p class="text-gray-600">误差: <span id="error" class="font-medium text-gray-800">${result.error.toFixed(6)}</span>%</p>
                 </div>
             `;
@@ -218,14 +225,31 @@
         function formatValueWithUnit(value, unit) {
             const absValue = Math.abs(value);
             
-            if (absValue >= 1.0) {
-                return { value: value.toFixed(3), unit: unit };
-            } else if (absValue >= 0.001) {
-                return { value: (value * 1000).toFixed(3), unit: 'm' + unit };
-            } else if (absValue >= 0.000001) {
-                return { value: (value * 1000000).toFixed(3), unit: 'μ' + unit };
-            } else {
-                return { value: (value * 1000000000).toFixed(3), unit: 'n' + unit };
+            // For frequency units (Hz), use different scaling
+            if (unit === 'Hz') {
+                if (absValue >= 1000000) {
+                    return { value: (value / 1000000).toFixed(3), unit: 'MHz' };
+                } else if (absValue >= 1000) {
+                    return { value: (value / 1000).toFixed(3), unit: 'kHz' };
+                } else if (absValue >= 1) {
+                    return { value: value.toFixed(3), unit: 'Hz' };
+                } else if (absValue >= 0.001) {
+                    return { value: (value * 1000).toFixed(3), unit: 'mHz' };
+                } else {
+                    return { value: (value * 1000000).toFixed(3), unit: 'μHz' };
+                }
+            } 
+            // For time units (s), keep the original logic
+            else {
+                if (absValue >= 1.0) {
+                    return { value: value.toFixed(3), unit: unit };
+                } else if (absValue >= 0.001) {
+                    return { value: (value * 1000).toFixed(3), unit: 'm' + unit };
+                } else if (absValue >= 0.000001) {
+                    return { value: (value * 1000000).toFixed(3), unit: 'μ' + unit };
+                } else {
+                    return { value: (value * 1000000000).toFixed(3), unit: 'n' + unit };
+                }
             }
         }
     </script>
